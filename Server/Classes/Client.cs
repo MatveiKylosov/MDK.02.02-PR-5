@@ -1,15 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Kylsoov
+namespace Server.Classes
 {
-    internal class Program
+    public class Client : Common.Client
     {
-        static void Main(string[] args)
-        {
-        }
+        public Socket Socket;
     }
 }
