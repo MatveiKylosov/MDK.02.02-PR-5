@@ -4,6 +4,7 @@ using System;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -15,11 +16,15 @@ namespace Client.Classes
         private readonly string _serverIp;
         private readonly int _serverPort;
         private const ulong _sizeBuffer = 2048;
+        private readonly string _username;
+        private readonly string _password;
 
-        public TCPClient(string serverIp, int serverPort)
+        public TCPClient(string serverIp, int serverPort, string username, string password)
         {
             _serverIp = serverIp;
             _serverPort = serverPort;
+            _username = username;
+            _password = password;
         }
 
         public async Task ConnectAsync()
@@ -43,13 +48,10 @@ namespace Client.Classes
                     return;
                 }
 
-                var client = JsonConvert.DeserializeObject<Common.Client>(receivedMessage.Data);
-                _client = new Client(clientSocket, client);
+                _client = new Client(clientSocket);
 
                 // Запуск обработки сообщений от сервера в отдельном потоке
                 _ = Task.Run(() => HandleServerResponseAsync());
-
-                Console.WriteLine("Подключение успешно установлено.");
             }
             catch (Exception ex)
             {
@@ -59,22 +61,48 @@ namespace Client.Classes
 
         private async Task HandleServerResponseAsync()
         {
+            bool isRunning = true;
             try
             {
-                while (true)
+                
+                CommandMessasge commandMessasge;
+                commandMessasge = new CommandMessasge() { Command = "Auth", Data = $"{_username}&{_password}" };
+                await SendMessageAsync(_client.NetworkStream, commandMessasge);
+
+                var receivedMessage = await ReceiveMessageAsync(_client.NetworkStream);
+                if (receivedMessage == null)
                 {
-                    CommandMessasge commandMessasge;
+                    isRunning = false;
+                }
+                else if(receivedMessage.Command == "Disconnect")
+                {
+                    isRunning = false;
+                }
+                if(receivedMessage.Command == "Client")
+                {
+
+                    var client = JsonConvert.DeserializeObject<Common.Client>(receivedMessage.Data);
+                    _client.Token = client.Token;
+                    _client.ConnectionTime = client.ConnectionTime;
+                    _client.Work = client.Work;
+                    isRunning = true;
+                    Console.WriteLine("Подключение успешно установлено.");
+                }
+
+                while (isRunning)
+                {
                     if (!_client.Work)
                     {
                         commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "" };
                         await SendMessageAsync(_client.NetworkStream, commandMessasge);
+                        _client.Work = false;
                         break;
                     }
 
                     commandMessasge = new CommandMessasge() { Command = "Ping", Data = "" };
                     await SendMessageAsync(_client.NetworkStream, commandMessasge);
 
-                    var receivedMessage = await ReceiveMessageAsync(_client.NetworkStream);
+                    receivedMessage = await ReceiveMessageAsync(_client.NetworkStream);
 
                     if (receivedMessage == null)
                     {
@@ -87,6 +115,7 @@ namespace Client.Classes
                     }
                     else if (receivedMessage.Command == "Disconnect")
                     {
+                        _client.Work = false;
                         Console.WriteLine("Получена команда Disconnect. Закрытие соединения...");
                         break;
                     }
@@ -95,6 +124,10 @@ namespace Client.Classes
             catch (Exception ex)
             {
                 Console.WriteLine($"Ошибка обработки ответа от сервера: {ex.Message}");
+            }
+            finally{
+                _client.Work = false;
+                Console.WriteLine($"Не удалось подключиться.");
             }
         }
 
@@ -155,7 +188,7 @@ namespace Client.Classes
 
         public void PrintStatus()
         {
-            if (_client == null)
+            if (_client == null || !_client.Work )
             {
                 Console.WriteLine("Клиент не подключён.");
                 return;

@@ -1,5 +1,6 @@
 ﻿using Common;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -43,49 +44,38 @@ namespace Server.Classes
                 {
                     if (listener.Pending())
                     {
-                        CommandMessasge commandMessasge;
+                        CommandMessasge commandMessasge = new CommandMessasge();
                         var tcpClient = await listener.AcceptTcpClientAsync();
 
                         // Проверка на черный список
                         var clientIp = (IPAddress)((IPEndPoint)tcpClient.Client.RemoteEndPoint).Address;
-                        bool disconnect;
+                        bool disconnect = false;
+
+                        lock (_connectedClients)
+                        {
+                            disconnect = _connectedClients.Count >= _maxClients;
+                            commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "No available seats" };
+                        }
 
                         lock (_blacklistClients)
                         {
-                            disconnect = _blacklistClients.Any(x => x.Equals(clientIp));
-                        }
-
-                        // Проверка на лимит подключений
-                        lock (_connectedClients)
-                        {
-                            disconnect = disconnect || _connectedClients.Count >= _maxClients;
+                            disconnect = disconnect || _blacklistClients.Any(x => x.Equals(clientIp));
+                            commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "Blocked" };
                         }
 
                         if (disconnect)
                         {
-                            commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "No available seats" };
                             await SendMessageAsync(tcpClient.Client, commandMessasge);
                             tcpClient.Close();
                             continue;
                         }
-
-                        // Создание нового клиента
-                        var sendClient = new Common.Client
-                        {
-                            Token = Guid.NewGuid().ToString(),
-                            ConnectionTime = DateTime.UtcNow,
-                            Work = true
-                        };
-
-                        commandMessasge = new CommandMessasge() { Command = "Client", Data = JsonConvert.SerializeObject((sendClient)) };
+                        commandMessasge = new CommandMessasge() { Command = "Wait", Data = "Wait data" };
                         await SendMessageAsync(tcpClient.Client, commandMessasge);
-
-                        var client = new Client(tcpClient.Client, sendClient);
+                        var client = new Client(tcpClient.Client);
 
                         lock (_connectedClients)
                         {
                             _connectedClients.Add(client);
-                            Console.WriteLine($"Новый клиент: {client.Token}");
                         }
 
                         // Асинхронная обработка клиента
@@ -106,9 +96,47 @@ namespace Server.Classes
 
         private async Task HandleClientAsync(Client client)
         {
+            bool faileAduthorization = false;
             try
             {
-                while (true)
+                bool isRunning = true;
+                CommandMessasge commandMessasge;
+
+                var recvLogData = await ReceiveMessageAsync(client.Socket);
+                isRunning = recvLogData != null;
+
+                if (isRunning)
+                {
+                    var logData = recvLogData.Data.Split('&');
+                    if (recvLogData.Command != "Auth" || logData.Length != 2 || !await UserInDatabaseAsync(logData[0], logData[1]))
+                    {
+                        commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "Wrong username or password" };
+                        await SendMessageAsync(client.Socket, commandMessasge);
+                        isRunning = false;
+                        faileAduthorization = true;
+                    }
+                }
+
+                if (isRunning)
+                {
+                    var sendClient = new Common.Client
+                    {
+                        Token = Guid.NewGuid().ToString(),
+                        ConnectionTime = DateTime.UtcNow,
+                        Work = true
+                    };
+
+                    commandMessasge = new CommandMessasge() { Command = "Client", Data = JsonConvert.SerializeObject(sendClient) };
+                    await SendMessageAsync(client.Socket, commandMessasge);
+
+                    client.Token = sendClient.Token;
+                    client.ConnectionTime = sendClient.ConnectionTime;
+                    client.Work = sendClient.Work;
+
+                    Console.WriteLine($"Новый клиент: {sendClient.Token}");
+                }
+
+                while (isRunning)
                 {
                     var receivedMessage = await ReceiveMessageAsync(client.Socket);
 
@@ -121,8 +149,6 @@ namespace Server.Classes
                     {
                         break;
                     }
-
-                    CommandMessasge commandMessasge;
 
                     if (IsTokenExpired(client.ConnectionTime) || !client.Work)
                     {
@@ -143,12 +169,15 @@ namespace Server.Classes
             }
             finally
             {
+                IPEndPoint remoteIpEndPoint = client.Socket.RemoteEndPoint as IPEndPoint;
                 lock (_connectedClients)
                 {
                     _connectedClients.Remove(client); // Удаляем клиента из списка
                 }
                 client.Socket.Close();
-                Console.WriteLine($"Клиент [{client.Token}] отключен.");
+
+
+                Console.WriteLine($"Клиент [{(!faileAduthorization ? client.Token : remoteIpEndPoint.Address.ToString())}] отключен. {(faileAduthorization ? "Причина: неудачная авторизация." : "")}");
             }
         }
 
@@ -247,12 +276,21 @@ namespace Server.Classes
                 lock (_blacklistClients)
                 {
                     var client = _connectedClients.FirstOrDefault(x => x.Token == Token);
-                    _blacklistClients.Add((IPAddress)((IPEndPoint)client.Socket.RemoteEndPoint).Address);
                     if (client == null)
                     {
-                        Console.WriteLine($"Клиента с токеном [{Token}] не существует");
+                        Console.WriteLine($"Клиента с токеном [{Token}] не существует.");
                         return;
                     }
+
+                    var ip = (IPAddress)((IPEndPoint)client.Socket.RemoteEndPoint).Address;
+                    if(_blacklistClients.Any(e => e == ip))
+                    {
+                        Console.WriteLine($"Данный пользователь уже заблокирован.");
+                        return;
+                    }
+
+                    _blacklistClients.Add(ip);
+
                     client.Work = false;
                 }
             }
@@ -265,5 +303,26 @@ namespace Server.Classes
 
             return (ulong)timeElapsed.TotalSeconds > _tokenLifetime;
         }
+
+        private async Task<bool> UserInDatabaseAsync(string username, string passwordUser)
+        {
+            var connectionString = "Server=192.168.0.111;Database=PR5;User=root;Password=;";
+
+            using (var connection = new MySqlConnector.MySqlConnection(connectionString))
+            {
+                await connection.OpenAsync();
+
+                string query = "SELECT COUNT(*) FROM users WHERE username = @usernameString and passwordUser = @passwordUserString";
+                using (var command = new MySqlConnector.MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@usernameString", username);
+                    command.Parameters.AddWithValue("@passwordUserString", passwordUser);
+
+                    var result = await command.ExecuteScalarAsync();
+                    return Convert.ToInt32(result) > 0;
+                }
+            }
+        }
+
     }
 }

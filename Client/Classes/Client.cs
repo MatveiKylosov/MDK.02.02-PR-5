@@ -12,14 +12,12 @@ namespace Client.Classes
     {
         [JsonIgnore]
         public TcpClient TCPClient;
+        [JsonIgnore]
         public NetworkStream NetworkStream;
 
-        public Client(TcpClient tcpClient, Common.Client baseClient)
+        public Client(TcpClient tcpClient)
         {
             TCPClient = tcpClient;
-            Token = baseClient.Token;
-            ConnectionTime = baseClient.ConnectionTime;
-            Work = baseClient.Work;
             NetworkStream = tcpClient.GetStream();
         }
     }

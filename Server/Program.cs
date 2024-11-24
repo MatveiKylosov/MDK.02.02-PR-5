@@ -13,7 +13,7 @@ namespace Server
             Tools.PrintLogo();
             while (true) 
             {
-#if false
+#if true
             var ip = Tools.GetInput("Укажите IP адрес сервера - ",
                                s => IPAddress.TryParse(s, out IPAddress address) ? address : IPAddress.Any,
                                s => true);
@@ -81,6 +81,7 @@ namespace Server
                         Console.WriteLine("Доступные команды:");
                         Console.WriteLine("  /status       - показать список подключенных клиентов");
                         Console.WriteLine("  /disconnect   - отключить клиента");
+                        Console.WriteLine("  /block        - добавить в чёрный список клиента");
                         Console.WriteLine("  /config       - сменить настройки сервер");
                         Console.WriteLine("  /help         - список команд");
                         break;

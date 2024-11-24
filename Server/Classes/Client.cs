@@ -13,12 +13,9 @@ namespace Server.Classes
         [JsonIgnore]
         public Socket Socket;
 
-        public Client(Socket socket, Common.Client baseClient)
+        public Client(Socket socket)
         {
             Socket = socket;
-            Token = baseClient.Token;
-            ConnectionTime = baseClient.ConnectionTime;
-            Work = baseClient.Work;
         }
     }
 }
