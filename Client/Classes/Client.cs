@@ -6,16 +6,16 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.Classes
+namespace Client.Classes
 {
     public class Client : Common.Client
     {
         [JsonIgnore]
-        public Socket Socket;
+        TcpClient TCPClient;
 
-        public Client(Socket socket, Common.Client baseClient)
+        public Client(TcpClient tcpClient, Common.Client baseClient)
         {
-            Socket = socket;
+            TCPClient = tcpClient;
             Token = baseClient.Token;
             ConnectionTime = baseClient.ConnectionTime;
             Work = baseClient.Work;

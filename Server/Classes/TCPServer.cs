@@ -51,16 +51,20 @@ namespace Server.Classes
                             continue;
                         }
 
-                        var client = new Client
+                        var sendClient = new Common.Client
                         {
-                            Socket = tcpClient.Client,
+
                             Token = Guid.NewGuid().ToString(),
                             ConnectionTime = DateTime.Now,
                             Work = true
                         };
-
-                        commandMessasge = new CommandMessasge() { Command = "Client", Data = JsonConvert.SerializeObject(client) };
+                        
+                        
+                        commandMessasge = new CommandMessasge() { Command = "Client", Data = JsonConvert.SerializeObject((sendClient)) };
                         await SendMessageAsync(tcpClient.Client, commandMessasge);
+
+                        Client client = new Client(tcpClient.Client, sendClient);
+                        client.Socket = tcpClient.Client;
 
                         lock (_connectedClients)
                         {

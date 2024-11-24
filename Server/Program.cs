@@ -11,7 +11,7 @@ namespace Server
         static async Task Main(string[] args)
         {
             Tools.PrintLogo();
-
+#if false
             var ip = Tools.GetInput("Укажите IP адрес сервера - ",
                                s => IPAddress.TryParse(s, out IPAddress address) ? address : IPAddress.Any,
                                s => true);
@@ -32,7 +32,9 @@ namespace Server
 
             // Создание и запуск сервера
             var server = new TCPServer(ip, port, maxClients, tokenLifetime);
-
+#else
+            var server = new TCPServer(IPAddress.Parse("127.0.0.1"), 1337, 5, 60);
+#endif
             // Запускаем сервер в отдельном потоке
             var serverTask = server.StartAsync();
 
