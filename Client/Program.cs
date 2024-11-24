@@ -14,16 +14,24 @@ namespace Client
         static async Task Main(string[] args)      
         {
             Tools.PrintLogo();
-            var ip = Tools.GetInput("Укажите IP адрес сервера - ",
+            while (true)
+            {
+#if false
+                var ip = Tools.GetInput("Укажите IP адрес сервера - ",
                    s => IPAddress.TryParse(s, out IPAddress address) ? address : IPAddress.Any,
                    s => true);
 
-            var port = Tools.GetInput("Укажите порт сервера - ",
-                                s => int.TryParse(s, out int p) ? p : -1,
-                                p => p > 1025 && p < 65536);
+                var port = Tools.GetInput("Укажите порт сервера - ",
+                                    s => int.TryParse(s, out int p) ? p : -1,
+                                    p => p > 1025 && p < 65536);
+                var client = new TCPClient(ip.ToString(), port);
+#else
+                var client = new TCPClient("127.0.0.1", 1337);
+#endif
 
-            var client = new TCPClient(ip.ToString(), port);
-            await client.ConnectAsync();
+                await client.ConnectAsync();
+                Console.ReadLine();
+            }
         }
     }
 }

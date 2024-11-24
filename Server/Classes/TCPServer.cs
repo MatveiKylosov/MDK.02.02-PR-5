@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -55,7 +56,7 @@ namespace Server.Classes
                         {
 
                             Token = Guid.NewGuid().ToString(),
-                            ConnectionTime = DateTime.Now,
+                            ConnectionTime = DateTime.UtcNow,
                             Work = true
                         };
                         
@@ -98,6 +99,9 @@ namespace Server.Classes
 
                     CommandMessasge commandMessasge;
 
+                    if (receivedMessage.Command == "Ping")
+                        Debug.WriteLine($"Прилетел ping");
+
                     if (IsTokenExpired(client.ConnectionTime))
                     {
                         commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "Token expired" };
@@ -105,8 +109,11 @@ namespace Server.Classes
                         break;
                     }
 
-                    commandMessasge = new CommandMessasge() { Command = "Ping", Data = "" };
+                    commandMessasge = new CommandMessasge() { Command = "Pong", Data = "" };
                     await SendMessageAsync(client.Socket, commandMessasge);
+                    Debug.WriteLine($"Отправил pong");
+
+                    await Task.Delay(100);
                 }
             }
             catch (Exception ex)
@@ -133,7 +140,7 @@ namespace Server.Classes
                     var message = JsonConvert.SerializeObject(commandMessasge);
                     byte[] responseBytes = Encoding.UTF8.GetBytes(message);
                     await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                    Console.WriteLine($"Отправлено: {message}");
+                    Debug.WriteLine($"Отправлено: {message}");
                 }
             }
             catch (Exception ex)
@@ -188,10 +195,14 @@ namespace Server.Classes
 
         private bool IsTokenExpired(DateTime connectionTime)
         {
+            // Получаем текущее время
             DateTime currentTime = DateTime.UtcNow;
-            TimeSpan timeDifference = currentTime - connectionTime;
 
-            return (ulong)timeDifference.TotalSeconds >= _tokenLifetime;
+            // Вычисляем разницу во времени в секундах
+            TimeSpan timeElapsed = currentTime - connectionTime;
+
+            // Проверяем, прошло ли больше секунд, чем указано в tokenLifetime
+            return (ulong)timeElapsed.TotalSeconds > _tokenLifetime;
         }
     }
 }

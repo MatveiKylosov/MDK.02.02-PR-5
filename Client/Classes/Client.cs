@@ -11,7 +11,8 @@ namespace Client.Classes
     public class Client : Common.Client
     {
         [JsonIgnore]
-        TcpClient TCPClient;
+        public TcpClient TCPClient;
+        public NetworkStream NetworkStream;
 
         public Client(TcpClient tcpClient, Common.Client baseClient)
         {
@@ -19,6 +20,7 @@ namespace Client.Classes
             Token = baseClient.Token;
             ConnectionTime = baseClient.ConnectionTime;
             Work = baseClient.Work;
+            NetworkStream = tcpClient.GetStream();
         }
     }
 }
