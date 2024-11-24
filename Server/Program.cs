@@ -11,6 +11,8 @@ namespace Server
         static async Task Main(string[] args)
         {
             Tools.PrintLogo();
+            while (true) 
+            {
 #if false
             var ip = Tools.GetInput("Укажите IP адрес сервера - ",
                                s => IPAddress.TryParse(s, out IPAddress address) ? address : IPAddress.Any,
@@ -33,16 +35,19 @@ namespace Server
             // Создание и запуск сервера
             var server = new TCPServer(ip, port, maxClients, tokenLifetime);
 #else
-            var server = new TCPServer(IPAddress.Parse("127.0.0.1"), 1337, 5, 60);
+                var server = new TCPServer(IPAddress.Parse("127.0.0.1"), 1337, 5, 160);
 #endif
-            // Запускаем сервер в отдельном потоке
-            var serverTask = server.StartAsync();
 
-            // Обрабатываем консольный ввод
-            HandleConsoleInput(server);
+                Console.WriteLine("Используйте /help для справки.");
+                // Запускаем сервер в отдельном потоке
+                var serverTask = server.StartAsync();
 
-            // Ожидаем завершения работы сервера
-            await serverTask;
+                // Обрабатываем консольный ввод
+                HandleConsoleInput(server);
+
+                // Ожидаем завершения работы сервера
+                await serverTask;
+            }
         }
 
         private static void HandleConsoleInput(TCPServer server)
@@ -51,19 +56,38 @@ namespace Server
 
             while (isRunning)
             {
-                Console.Write("Введите команду: ");
-                string command = Console.ReadLine();
+                var command = Console.ReadLine().ToLower().Split(' ');
 
-                switch (command.ToLower())
+                switch (command[0])
                 {
-                    case "/clients":
+                    case "/disconnect":
+                        {
+                            if (command.Length == 1)
+                            {
+                                Console.Write($"Для отключение укажите токен клиента.");
+                            }
+                            else
+                            {
+                                server.Disconnect(command[1]);
+                            }
+                            break;
+                        }
+
+                    case "/status":
                         server.ListConnectedClients();
                         break;
 
                     case "/help":
                         Console.WriteLine("Доступные команды:");
-                        Console.WriteLine("  /clients   - показать список подключенных клиентов");
-                        Console.WriteLine("  /help      - список команд");
+                        Console.WriteLine("  /status       - показать список подключенных клиентов");
+                        Console.WriteLine("  /disconnect   - отключить клиента");
+                        Console.WriteLine("  /config       - сменить настройки сервер");
+                        Console.WriteLine("  /help         - список команд");
+                        break;
+
+                    case "/config":
+                        server.DisconnectAll();
+                        isRunning = false;
                         break;
 
                     default:

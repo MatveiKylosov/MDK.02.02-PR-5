@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.Diagnostics;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -10,6 +11,7 @@ namespace Client.Classes
 {
     public class TCPClient
     {
+        private Client _client;
         private readonly string _serverIp;
         private readonly int _serverPort;
         private const ulong _sizeBuffer = 2048;
@@ -26,7 +28,6 @@ namespace Client.Classes
             {
                 var clientSocket = new TcpClient(_serverIp, _serverPort);
 
-                // Проверяем, подключен ли сокет
                 if (!clientSocket.Connected)
                 {
                     Console.WriteLine("Не удалось подключиться к серверу.");
@@ -34,8 +35,6 @@ namespace Client.Classes
                 }
 
                 var networkStream = clientSocket.GetStream();
-
-                // Получаем начальное сообщение от сервера
                 var receivedMessage = await ReceiveMessageAsync(networkStream);
 
                 if (receivedMessage == null || receivedMessage.Command == "Disconnect")
@@ -45,13 +44,12 @@ namespace Client.Classes
                 }
 
                 var client = JsonConvert.DeserializeObject<Common.Client>(receivedMessage.Data);
-                Client _client = new Client(clientSocket, client);
+                _client = new Client(clientSocket, client);
 
-                // Обработка ответа от сервера
-                await HandleServerResponseAsync(_client);
+                // Запуск обработки сообщений от сервера в отдельном потоке
+                _ = Task.Run(() => HandleServerResponseAsync());
 
-                // Закрытие сокета после завершения всех операций
-                clientSocket.Close();
+                Console.WriteLine("Подключение успешно установлено.");
             }
             catch (Exception ex)
             {
@@ -59,36 +57,39 @@ namespace Client.Classes
             }
         }
 
-        private async Task HandleServerResponseAsync(Client _client)
+
+        private async Task HandleServerResponseAsync()
         {
             try
             {
-                bool work = true;
-
-                while (work)
+                while (true)
                 {
-                    // Отправка Ping
-                    CommandMessasge commandMessasge = new CommandMessasge() { Command = "Ping", Data = "" };
-                    await SendMessageAsync(_client.NetworkStream, commandMessasge);
-                    Debug.WriteLine($"Отправил ping");
+                    CommandMessasge commandMessasge;
+                    if (!_client.Work)
+                    {
+                        commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "" };
+                        await SendMessageAsync(_client.NetworkStream, commandMessasge);
+                        break;
+                    }
 
-                    // Получаем ответ от сервера
+                    commandMessasge = new CommandMessasge() { Command = "Ping", Data = "" };
+                    await SendMessageAsync(_client.NetworkStream, commandMessasge);
+
                     var receivedMessage = await ReceiveMessageAsync(_client.NetworkStream);
 
                     if (receivedMessage == null)
                     {
                         Console.WriteLine($"Ошибка получения ответа от сервера");
-                        work = false;
+                        break;
                     }
                     else if (receivedMessage.Command == "Pong")
                     {
-                        Debug.WriteLine($"Прилетел pong");
-                        await Task.Delay(100); // Задержка перед следующим ping
+                        await Task.Delay(100);
                     }
                     else if (receivedMessage.Command == "Disconnect")
                     {
                         Console.WriteLine("Получена команда Disconnect. Закрытие соединения...");
-                        work = false;
+                        break;
                     }
                 }
             }
@@ -108,7 +109,7 @@ namespace Client.Classes
                     var message = JsonConvert.SerializeObject(commandMessasge);
                     byte[] responseBytes = Encoding.UTF8.GetBytes(message);
                     await networkStream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                    Debug.WriteLine($"Отправлено: {message}");
+                    Debug.WriteLine($"Отправлено: {message}", "Client");
                 }
                 else
                 {
@@ -137,6 +138,7 @@ namespace Client.Classes
                     }
 
                     string receivedMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Debug.WriteLine($"Получено: {JsonConvert.DeserializeObject<CommandMessasge>(receivedMessage)}", "Client");
                     return JsonConvert.DeserializeObject<CommandMessasge>(receivedMessage);
                 }
                 else
@@ -149,6 +151,34 @@ namespace Client.Classes
             {
                 Console.WriteLine($"Ошибка получения сообщения: {ex.Message}");
                 return null;
+            }
+        }
+
+        public void PrintStatus()
+        {
+            if (_client == null)
+            {
+                Console.WriteLine("Клиент не подключён.");
+                return;
+            }
+
+            lock (_client)
+            {
+                Console.WriteLine($"Токен: [{_client.Token}], время подключения: {_client.ConnectionTime.ToString("HH:mm:ss dd.MM")}, подключён уже {(long)Math.Floor((DateTime.UtcNow - _client.ConnectionTime).TotalSeconds)} секунд.");
+            }
+        }
+
+        public void CloseConnection()
+        {
+            if (_client == null)
+            {
+                Console.WriteLine("Клиент не подключён.");
+                return;
+            }
+
+            lock (_client)
+            {
+                _client.Work = false;
             }
         }
     }

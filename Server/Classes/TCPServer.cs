@@ -70,6 +70,7 @@ namespace Server.Classes
                         lock (_connectedClients)
                         {
                             _connectedClients.Add(client); // Добавляем клиента в список
+                            Console.WriteLine($"Новый клиент: {client.Token}");
                         }
 
                         _ = HandleClientAsync(client); // Асинхронная обработка клиента
@@ -90,19 +91,23 @@ namespace Server.Classes
         {
             try
             {
-                while (client.Work)
+                while (true)
                 {
                     var receivedMessage = await ReceiveMessageAsync(client.Socket);
 
                     if (receivedMessage == null)
+                    {
                         break;
+                    }
+
+                    if(receivedMessage.Command == "Disconnect")
+                    {
+                        break;
+                    }
 
                     CommandMessasge commandMessasge;
 
-                    if (receivedMessage.Command == "Ping")
-                        Debug.WriteLine($"Прилетел ping");
-
-                    if (IsTokenExpired(client.ConnectionTime))
+                    if (IsTokenExpired(client.ConnectionTime) || !client.Work)
                     {
                         commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "Token expired" };
                         await SendMessageAsync(client.Socket, commandMessasge);
@@ -111,7 +116,6 @@ namespace Server.Classes
 
                     commandMessasge = new CommandMessasge() { Command = "Pong", Data = "" };
                     await SendMessageAsync(client.Socket, commandMessasge);
-                    Debug.WriteLine($"Отправил pong");
 
                     await Task.Delay(100);
                 }
@@ -140,7 +144,7 @@ namespace Server.Classes
                     var message = JsonConvert.SerializeObject(commandMessasge);
                     byte[] responseBytes = Encoding.UTF8.GetBytes(message);
                     await stream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                    Debug.WriteLine($"Отправлено: {message}");
+                    Debug.WriteLine($"Получено {message}", "Server");
                 }
             }
             catch (Exception ex)
@@ -164,6 +168,7 @@ namespace Server.Classes
                     }
 
                     string receivedMessage = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Debug.WriteLine($"Получено {JsonConvert.DeserializeObject<CommandMessasge>(receivedMessage)}", "Server");
                     return JsonConvert.DeserializeObject<CommandMessasge>(receivedMessage);
                 }
             }
@@ -183,7 +188,7 @@ namespace Server.Classes
                     Console.WriteLine("Подключенные клиенты:");
                     foreach (var client in _connectedClients)
                     {
-                        Console.WriteLine($"Токен: {client.Token}, подключен: {client.ConnectionTime}, подключен уже: {(DateTime.UtcNow - client.ConnectionTime).TotalSeconds}.");
+                        Console.WriteLine($"Токен: {client.Token}, подключен: {client.ConnectionTime}, подключен уже: {(long)Math.Floor((DateTime.UtcNow - client.ConnectionTime).TotalSeconds)} секунд.");
                     }
                 }
                 else
@@ -193,15 +198,36 @@ namespace Server.Classes
             }
         }
 
+        public void Disconnect(string Token = "")
+        {
+            lock (_connectedClients) 
+            {
+                var client = _connectedClients.FirstOrDefault(x => x.Token == Token);
+                if (client == null)
+                {
+                    Console.WriteLine($"Клиента с токеном [{Token}] не существует");
+                    return;
+                }
+                client.Work = false;
+            }
+        }
+
+        public void DisconnectAll()
+        {
+            lock (_connectedClients)
+            {
+                foreach (var client in _connectedClients)
+                {
+                    Disconnect(client.Token);
+                }
+            }
+        }
+
         private bool IsTokenExpired(DateTime connectionTime)
         {
-            // Получаем текущее время
             DateTime currentTime = DateTime.UtcNow;
-
-            // Вычисляем разницу во времени в секундах
             TimeSpan timeElapsed = currentTime - connectionTime;
 
-            // Проверяем, прошло ли больше секунд, чем указано в tokenLifetime
             return (ulong)timeElapsed.TotalSeconds > _tokenLifetime;
         }
     }
