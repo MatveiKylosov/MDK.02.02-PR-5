@@ -57,7 +57,6 @@ namespace Client.Classes
             }
         }
 
-
         private async Task HandleServerResponseAsync()
         {
             try

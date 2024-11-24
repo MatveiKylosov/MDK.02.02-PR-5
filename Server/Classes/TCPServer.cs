@@ -21,7 +21,7 @@ namespace Server.Classes
         private const ulong _sizeBuffer = 2048;
 
         private readonly List<Client> _connectedClients = new List<Client>();
-
+        private List<IPAddress> _blacklistClients = new List<IPAddress>();
 
         public TCPServer(IPAddress ip, int port, int maxClients, ulong tokenLifetime)
         {
@@ -43,37 +43,53 @@ namespace Server.Classes
                 {
                     if (listener.Pending())
                     {
-                        var tcpClient = await listener.AcceptTcpClientAsync();
                         CommandMessasge commandMessasge;
-                        if (_connectedClients.Count == _maxClients)
+                        var tcpClient = await listener.AcceptTcpClientAsync();
+
+                        // Проверка на черный список
+                        var clientIp = (IPAddress)((IPEndPoint)tcpClient.Client.RemoteEndPoint).Address;
+                        bool disconnect;
+
+                        lock (_blacklistClients)
+                        {
+                            disconnect = _blacklistClients.Any(x => x.Equals(clientIp));
+                        }
+
+                        // Проверка на лимит подключений
+                        lock (_connectedClients)
+                        {
+                            disconnect = disconnect || _connectedClients.Count >= _maxClients;
+                        }
+
+                        if (disconnect)
                         {
                             commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "No available seats" };
                             await SendMessageAsync(tcpClient.Client, commandMessasge);
+                            tcpClient.Close();
                             continue;
                         }
 
+                        // Создание нового клиента
                         var sendClient = new Common.Client
                         {
-
                             Token = Guid.NewGuid().ToString(),
                             ConnectionTime = DateTime.UtcNow,
                             Work = true
                         };
-                        
-                        
+
                         commandMessasge = new CommandMessasge() { Command = "Client", Data = JsonConvert.SerializeObject((sendClient)) };
                         await SendMessageAsync(tcpClient.Client, commandMessasge);
 
-                        Client client = new Client(tcpClient.Client, sendClient);
-                        client.Socket = tcpClient.Client;
+                        var client = new Client(tcpClient.Client, sendClient);
 
                         lock (_connectedClients)
                         {
-                            _connectedClients.Add(client); // Добавляем клиента в список
+                            _connectedClients.Add(client);
                             Console.WriteLine($"Новый клиент: {client.Token}");
                         }
 
-                        _ = HandleClientAsync(client); // Асинхронная обработка клиента
+                        // Асинхронная обработка клиента
+                        _ = HandleClientAsync(client);
                     }
                     else
                     {
@@ -86,6 +102,7 @@ namespace Server.Classes
                 Console.WriteLine($"Ошибка сервера: {ex.Message}");
             }
         }
+
 
         private async Task HandleClientAsync(Client client)
         {
@@ -219,6 +236,24 @@ namespace Server.Classes
                 foreach (var client in _connectedClients)
                 {
                     Disconnect(client.Token);
+                }
+            }
+        }
+
+        public void BlockClient(string Token)
+        {
+            lock (_connectedClients)
+            {
+                lock (_blacklistClients)
+                {
+                    var client = _connectedClients.FirstOrDefault(x => x.Token == Token);
+                    _blacklistClients.Add((IPAddress)((IPEndPoint)client.Socket.RemoteEndPoint).Address);
+                    if (client == null)
+                    {
+                        Console.WriteLine($"Клиента с токеном [{Token}] не существует");
+                        return;
+                    }
+                    client.Work = false;
                 }
             }
         }

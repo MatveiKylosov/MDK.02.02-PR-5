@@ -90,6 +90,19 @@ namespace Server
                         isRunning = false;
                         break;
 
+                    case "/block":
+                        {
+                            if (command.Length == 1)
+                            {
+                                Console.Write($"Чтобы заблокировать пользователя, необходимо указать токен клиента.");
+                            }
+                            else
+                            {
+                                server.BlockClient(command[1]);
+                            }
+                            break;
+                        }
+
                     default:
                         Console.WriteLine("Неизвестная команда. Используйте /help для справки.");
                         break;
