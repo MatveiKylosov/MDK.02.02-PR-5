@@ -23,7 +23,7 @@ namespace Server
                                             s => int.TryParse(s, out int q) ? q : -1,
                                             q => q > 0);
 
-            var tokenLifetime = Tools.GetInput<ulong>("Укажите сколько будет активен токен в секундах (60 или более) - ",
+            var tokenLifetime = Tools.GetInput("Укажите сколько будет активен токен в секундах (60 или более) - ",
                                           s => ulong.TryParse(s, out ulong t) ? t : 60,
                                           t => t > 60);
 
@@ -53,14 +53,14 @@ namespace Server
 
                 switch (command.ToLower())
                 {
-                    case "clients":
+                    case "/clients":
                         server.ListConnectedClients();
                         break;
 
-                    case "help":
+                    case "/help":
                         Console.WriteLine("Доступные команды:");
-                        Console.WriteLine("  clients   - показать список подключенных клиентов");
-                        Console.WriteLine("  help      - список команд");
+                        Console.WriteLine("  /clients   - показать список подключенных клиентов");
+                        Console.WriteLine("  /help      - список команд");
                         break;
 
                     default:
