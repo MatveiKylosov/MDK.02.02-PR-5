@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,5 +18,14 @@ namespace Server.Classes
         {
             Socket = socket;
         }
+        public string GetClientIpAddress()
+        {
+            if (Socket?.RemoteEndPoint is IPEndPoint remoteEndPoint)
+            {
+                return remoteEndPoint.Address.ToString();
+            }
+            return string.Empty;
+        }
+
     }
 }

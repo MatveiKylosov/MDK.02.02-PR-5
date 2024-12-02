@@ -17,11 +17,14 @@ namespace Server
 
         static void DisplaySettings()
         {
+            Console.Clear();
+            Tools.PrintLogo();
             Console.WriteLine("Текущие настройки сервера:");
             Console.WriteLine($"  IP-адрес: {_address}");
             Console.WriteLine($"  Порт: {_port}");
             Console.WriteLine($"  Максимальное количество клиентов: {_maxClients}");
             Console.WriteLine($"  Время жизни токена (сек.): {_tokenLifetime}");
+            Console.WriteLine($"\nдля просмотра всех команд используйте команду /help");
         }
 
 
@@ -31,7 +34,7 @@ namespace Server
                    s => IPAddress.TryParse(s, out IPAddress address) ? address : IPAddress.Any,
                    s => true);
 
-            var port = Tools.GetInput("Укажите порт сервера - ",
+            var port = Tools.GetInput("Укажите порт сервера (от 1025 до 65536) - ",
                                 s => int.TryParse(s, out int p) ? p : -1,
                                 p => p > 1025 && p < 65536);
 
@@ -41,7 +44,7 @@ namespace Server
 
             var tokenLifetime = Tools.GetInput("Укажите сколько будет активен токен в секундах (60 или более) - ",
                                           s => ulong.TryParse(s, out ulong t) ? t : 60,
-                                          t => t > 60);
+                                          t => t >= 60);
 
             _address = ip;
             _port = port;
@@ -113,7 +116,6 @@ namespace Server
 
         static async Task Main(string[] args)
         {
-            Tools.PrintLogo();
             while (true) 
             {
 #if true
@@ -123,8 +125,6 @@ namespace Server
                 }
 
                 DisplaySettings();
-
-                Console.WriteLine($"\nдля просмотра всех команд используйте команду /help");
 
                 // Создание и запуск сервера
                 var server = new TCPServer(_address, _port, _maxClients, _tokenLifetime);
@@ -181,10 +181,13 @@ namespace Server
                         break;
 
                     case "/config":
-                        server.DisconnectAll();
-                        isRunning = false;
-                        GetSettings();
-                        break;
+                        {
+                            server.DisconnectAll();
+                            isRunning = false;
+                            GetSettings();
+                            DisplaySettings();
+                            break;
+                        }
 
                     case "/block":
                         {

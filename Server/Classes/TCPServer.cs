@@ -15,6 +15,7 @@ namespace Server.Classes
 {
     public class TCPServer
     {
+        private bool _stopServer = false;
         private readonly IPAddress _ip;
         private readonly int _port;
         private readonly int _maxClients;
@@ -59,8 +60,11 @@ namespace Server.Classes
 
                         lock (_blacklistClients)
                         {
-                            disconnect = disconnect || _blacklistClients.Any(x => x.Equals(clientIp));
-                            commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "Blocked" };
+                            if (!disconnect)
+                            {
+                                disconnect = _blacklistClients.Any(x => x.Equals(clientIp));
+                                commandMessasge = new CommandMessasge() { Command = "Disconnect", Data = "Blocked" };
+                            }                            
                         }
 
                         if (disconnect)
@@ -176,8 +180,8 @@ namespace Server.Classes
                 }
                 client.Socket.Close();
 
-
-                Console.WriteLine($"Клиент [{(!faileAduthorization ? client.Token : remoteIpEndPoint.Address.ToString())}] отключен. {(faileAduthorization ? "Причина: неудачная авторизация." : "")}");
+                if(!_stopServer)
+                    Console.WriteLine($"Клиент [{(!faileAduthorization ? client.Token : remoteIpEndPoint.Address.ToString())}] отключен. {(faileAduthorization ? "Причина: неудачная авторизация." : "")}");
             }
         }
 
@@ -234,7 +238,7 @@ namespace Server.Classes
                     Console.WriteLine("Подключенные клиенты:");
                     foreach (var client in _connectedClients)
                     {
-                        Console.WriteLine($"Токен: {client.Token}, подключен: {client.ConnectionTime}, подключен уже: {(long)Math.Floor((DateTime.UtcNow - client.ConnectionTime).TotalSeconds)} секунд.");
+                        Console.WriteLine($"Токен: {client.Token}, подключен: {client.ConnectionTime}, подключен уже: {(long)Math.Floor((DateTime.UtcNow - client.ConnectionTime).TotalSeconds)} секунд, IP-адрес: {client.GetClientIpAddress()}.");
                     }
                 }
                 else
@@ -244,7 +248,7 @@ namespace Server.Classes
             }
         }
 
-        public void Disconnect(string Token = "")
+        public void Disconnect(string Token)
         {
             lock (_connectedClients) 
             {
@@ -262,6 +266,7 @@ namespace Server.Classes
         {
             lock (_connectedClients)
             {
+                _stopServer = true;
                 foreach (var client in _connectedClients)
                 {
                     Disconnect(client.Token);
@@ -306,7 +311,7 @@ namespace Server.Classes
 
         private async Task<bool> UserInDatabaseAsync(string username, string passwordUser)
         {
-            var connectionString = "Server=192.168.0.111;Database=PR5;User=root;Password=dawda6358;";
+            var connectionString = "Server=192.168.0.111;Database=PR5;User=root;Password=;";
 
             using (var connection = new MySqlConnector.MySqlConnection(connectionString))
             {

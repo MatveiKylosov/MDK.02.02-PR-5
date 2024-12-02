@@ -62,9 +62,9 @@ namespace Client.Classes
         private async Task HandleServerResponseAsync()
         {
             bool isRunning = true;
+            string msg = "";
             try
             {
-                
                 CommandMessasge commandMessasge;
                 commandMessasge = new CommandMessasge() { Command = "Auth", Data = $"{_username}&{_password}" };
                 await SendMessageAsync(_client.NetworkStream, commandMessasge);
@@ -77,6 +77,7 @@ namespace Client.Classes
                 else if(receivedMessage.Command == "Disconnect")
                 {
                     isRunning = false;
+                    msg = "Отключён сервером";
                 }
                 else if(receivedMessage.Command == "Client")
                 {
@@ -117,6 +118,7 @@ namespace Client.Classes
                     {
                         _client.Work = false;
                         Console.WriteLine("Получена команда Disconnect. Закрытие соединения...");
+                        msg = "Отключён сервером";
                         break;
                     }
                 }
@@ -126,8 +128,8 @@ namespace Client.Classes
                 Console.WriteLine($"Ошибка обработки ответа от сервера: {ex.Message}");
             }
             finally{
+                Console.WriteLine(msg);
                 _client.Work = false;
-                Console.WriteLine($"Не удалось подключиться.");
             }
         }
 
@@ -204,7 +206,7 @@ namespace Client.Classes
         {
             if (_client == null)
             {
-                Console.WriteLine("Клиент не подключён.");
+                Debug.WriteLine("Клиент не подключён.");
                 return;
             }
 
