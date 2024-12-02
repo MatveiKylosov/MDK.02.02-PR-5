@@ -3,20 +3,33 @@ using System.Net;
 using System.Threading.Tasks;
 using Server.Classes;
 using Common;
+using System.IO;
+using System.Diagnostics;
 
 namespace Server
 {
     internal class Program
     {
-        static async Task Main(string[] args)
+        static private IPAddress _address;
+        static private int _port;
+        static private int _maxClients;
+        static private ulong _tokenLifetime;
+
+        static void DisplaySettings()
         {
-            Tools.PrintLogo();
-            while (true) 
-            {
-#if true
+            Console.WriteLine("Текущие настройки сервера:");
+            Console.WriteLine($"  IP-адрес: {_address}");
+            Console.WriteLine($"  Порт: {_port}");
+            Console.WriteLine($"  Максимальное количество клиентов: {_maxClients}");
+            Console.WriteLine($"  Время жизни токена (сек.): {_tokenLifetime}");
+        }
+
+
+        static void GetSettings()
+        {
             var ip = Tools.GetInput("Укажите IP адрес сервера - ",
-                               s => IPAddress.TryParse(s, out IPAddress address) ? address : IPAddress.Any,
-                               s => true);
+                   s => IPAddress.TryParse(s, out IPAddress address) ? address : IPAddress.Any,
+                   s => true);
 
             var port = Tools.GetInput("Укажите порт сервера - ",
                                 s => int.TryParse(s, out int p) ? p : -1,
@@ -30,10 +43,91 @@ namespace Server
                                           s => ulong.TryParse(s, out ulong t) ? t : 60,
                                           t => t > 60);
 
-            Console.WriteLine($"\nдля просмотра всех команд используйте команду /help");
+            _address = ip;
+            _port = port;
+            _maxClients = maxClients;
+            _tokenLifetime = tokenLifetime;
 
-            // Создание и запуск сервера
-            var server = new TCPServer(ip, port, maxClients, tokenLifetime);
+            using (StreamWriter writer = new StreamWriter("server.cfg"))
+            {
+                writer.WriteLine(_address.ToString());
+                writer.WriteLine(_port.ToString());
+                writer.WriteLine(_maxClients.ToString());
+                writer.WriteLine(_tokenLifetime.ToString());
+            }
+        }
+
+        static bool GetSettingsFromFile()
+        {
+            string configFile = "server.cfg";
+
+            if (!File.Exists(configFile))
+            {
+                Console.WriteLine("Файл конфигурации не найден.");
+                return false;
+            }
+
+            try
+            {
+                string[] lines = File.ReadAllLines(configFile);
+
+                if (lines.Length < 4)
+                {
+                    Console.WriteLine("Файл конфигурации поврежден или неполный.");
+                    return false;
+                }
+
+                if (!IPAddress.TryParse(lines[0], out _address))
+                {
+                    Console.WriteLine("Ошибка чтения IP-адреса из конфигурационного файла.");
+                    return false;
+                }
+
+                if (!int.TryParse(lines[1], out _port) || _port <= 1025 || _port >= 65536)
+                {
+                    Console.WriteLine("Ошибка чтения порта из конфигурационного файла.");
+                    return false;
+                }
+
+                if (!int.TryParse(lines[2], out _maxClients) || _maxClients <= 0)
+                {
+                    Console.WriteLine("Ошибка чтения максимального количества клиентов.");
+                    return false;
+                }
+
+                if (!ulong.TryParse(lines[3], out _tokenLifetime) || _tokenLifetime < 60)
+                {
+                    Console.WriteLine("Ошибка чтения времени жизни токена.");
+                    return false;
+                }
+
+                Console.WriteLine("Настройки успешно загружены из файла.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Произошла ошибка при чтении конфигурационного файла: {ex.Message}");
+                return false;
+            }
+        }
+
+        static async Task Main(string[] args)
+        {
+            Tools.PrintLogo();
+            while (true) 
+            {
+#if true
+                if (!GetSettingsFromFile())
+                {
+                    GetSettings();
+                }
+
+                DisplaySettings();
+
+                Console.WriteLine($"\nдля просмотра всех команд используйте команду /help");
+
+                // Создание и запуск сервера
+                var server = new TCPServer(_address, _port, _maxClients, _tokenLifetime);
 #else
                 var server = new TCPServer(IPAddress.Parse("127.0.0.1"), 1337, 5, 160);
 #endif
@@ -89,6 +183,7 @@ namespace Server
                     case "/config":
                         server.DisconnectAll();
                         isRunning = false;
+                        GetSettings();
                         break;
 
                     case "/block":

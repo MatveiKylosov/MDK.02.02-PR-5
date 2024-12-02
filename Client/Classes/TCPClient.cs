@@ -78,7 +78,7 @@ namespace Client.Classes
                 {
                     isRunning = false;
                 }
-                if(receivedMessage.Command == "Client")
+                else if(receivedMessage.Command == "Client")
                 {
 
                     var client = JsonConvert.DeserializeObject<Common.Client>(receivedMessage.Data);

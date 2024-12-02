@@ -306,7 +306,7 @@ namespace Server.Classes
 
         private async Task<bool> UserInDatabaseAsync(string username, string passwordUser)
         {
-            var connectionString = "Server=192.168.0.111;Database=PR5;User=root;Password=;";
+            var connectionString = "Server=192.168.0.111;Database=PR5;User=root;Password=dawda6358;";
 
             using (var connection = new MySqlConnector.MySqlConnection(connectionString))
             {
